@@ -1,0 +1,296 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: FFS
+Globals:
+  Api:
+    OpenApiVersion: 3.0.1
+    Cors:
+      AllowHeaders: "'*'"
+      AllowOrigin: "'*'"
+      AllowMethods: "'OPTIONS, POST, PUT, DELETE'"
+Resources:
+  ffsAPI:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: DEV
+      Auth:
+        Authorizers:
+          CognitoAuth:
+            UserPoolArn: arn:aws:cognito-idp:eu-west-3:718850923105:userpool/eu-west-3_iUS6Yw2MK
+  DynamoDBTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: ffs-user-image
+      AttributeDefinitions:
+      - AttributeName: userId
+        AttributeType: S
+      - AttributeName: imgId
+        AttributeType: S
+      KeySchema:
+      - AttributeName: userId
+        KeyType: HASH
+      - AttributeName: imgId
+        KeyType: RANGE
+      ProvisionedThroughput:
+        ReadCapacityUnits: 1
+        WriteCapacityUnits: 1
+  FFSUserBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: ffs-user-image
+  ffsNeural:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: app.lambda_handler
+      Runtime: python3.8
+      CodeUri: s3://ffs-codes/0a15da297585492b483ca9757f9c463c
+      Description: Upload Image
+      MemorySize: 1024
+      Timeout: 60
+      Environment:
+        Variables:
+          BucketName: ffs-user-image
+          DynamoDbName: ffs-user-image
+      Policies:
+      - S3CrudPolicy:
+          BucketName: ffs-user-image
+      - DynamoDBCrudPolicy:
+          TableName: ffs-user-image
+      - AWSLambdaVPCAccessExecutionRole
+      Events:
+        ffsNeural:
+          Type: S3
+          Properties:
+            Bucket:
+              Ref: FFSUserBucket
+            Events:
+            - s3:ObjectRemoved:Delete
+            - s3:ObjectCreated:Put
+            Filter:
+              S3Key:
+                Rules:
+                - Name: prefix
+                  Value: cognito/ffs
+  ffsUpdate:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: app.lambda_handler
+      Runtime: python3.8
+      CodeUri: s3://ffs-codes/01f69384eaa75f1eb971eeb3b5931b8c
+      Description: Upload Image
+      MemorySize: 128
+      Timeout: 3
+      Environment:
+        Variables:
+          BucketName: ffs-user-image
+          DynamoDbName: ffs-user-image
+          origin: '*'
+          headers: '*'
+          methods: OPTIONS, PUT, DELETE
+          credentials: true
+      Policies:
+      - S3CrudPolicy:
+          BucketName: ffs-user-image
+      - DynamoDBCrudPolicy:
+          TableName: ffs-user-image
+      Events:
+        ffsUpdate:
+          Type: Api
+          Properties:
+            Path: /ffs/update
+            Method: PUT
+            RestApiId:
+              Ref: ffsAPI
+            Auth:
+              Authorizer: CognitoAuth
+        ffsDelete:
+          Type: Api
+          Properties:
+            Path: /ffs/update
+            Method: DELETE
+            RestApiId:
+              Ref: ffsAPI
+            Auth:
+              Authorizer: CognitoAuth
+  ffsCreateOutfit:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: app.lambda_handler
+      Runtime: python3.8
+      CodeUri: s3://ffs-codes/a5b4c6d386fabba97dfcd8050d6db148
+      Description: Upload Image
+      MemorySize: 128
+      Timeout: 3
+      Environment:
+        Variables:
+          BucketName: ffs-images-gt
+          origin: '*'
+          headers: '*'
+          methods: OPTIONS, POST
+          credentials: true
+      Policies:
+      - S3CrudPolicy:
+          BucketName: ffs-images-gt
+      Events:
+        ffsUpdate:
+          Type: Api
+          Properties:
+            Path: /ffs/createOutfit
+            Method: POST
+            RestApiId:
+              Ref: ffsAPI
+            Auth:
+              Authorizer: CognitoAuth
+  ffsList:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: app.lambda_handler
+      Runtime: python3.8
+      CodeUri: s3://ffs-codes/66a2f3cad80625bbff85762195132aa4
+      Description: Upload Image
+      MemorySize: 128
+      Timeout: 3
+      Environment:
+        Variables:
+          BucketName: ffs-user-image
+          origin: '*'
+          headers: '*'
+          methods: GET
+          credentials: true
+      Policies:
+      - S3CrudPolicy:
+          BucketName:
+            Ref: FFSUserBucket
+      Events:
+        ffsList:
+          Type: Api
+          Properties:
+            Path: /ffs/list
+            Method: GET
+            RestApiId:
+              Ref: ffsAPI
+            Auth:
+              Authorizer: CognitoAuth
+  ffsListAdmin:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: app.lambda_handler
+      Runtime: python3.8
+      CodeUri: s3://ffs-codes/2889bf1d1b41fb7eea9e42a4a4b88a14
+      Description: Upload Image
+      MemorySize: 128
+      Timeout: 60
+      Environment:
+        Variables:
+          BucketName: ffs-user-image
+          BucketNameGT: ffs-images-gt
+          DynamoDbName: ffs-user-image
+          origin: '*'
+          headers: '*'
+          methods: GET
+          credentials: true
+      Policies:
+      - S3CrudPolicy:
+          BucketName:
+            Ref: FFSUserBucket
+      - DynamoDBCrudPolicy:
+          TableName: ffs-user-image
+      - S3CrudPolicy:
+          BucketName: ffs-images-gt
+      Events:
+        ffsListAdmin:
+          Type: Api
+          Properties:
+            Path: /ffs/listAdmin
+            Method: GET
+            RestApiId:
+              Ref: ffsAPI
+            Auth:
+              Authorizer: CognitoAuth
+  ffsListOutfit:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: app.lambda_handler
+      Runtime: python3.8
+      CodeUri: s3://ffs-codes/56ba2b9463940581f24115e3f8684abe
+      Description: List Outfit
+      MemorySize: 128
+      Timeout: 3
+      Environment:
+        Variables:
+          BucketName: ffs-images-gt
+          origin: '*'
+          headers: '*'
+          methods: GET
+          credentials: true
+      Policies:
+      - S3CrudPolicy:
+          BucketName: ffs-images-gt
+      Events:
+        ffsListoutfit:
+          Type: Api
+          Properties:
+            Path: /ffs/listoutfit
+            Method: GET
+            RestApiId:
+              Ref: ffsAPI
+            Auth:
+              Authorizer: CognitoAuth
+  ffsInfo:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: app.lambda_handler
+      Runtime: python3.8
+      CodeUri: s3://ffs-codes/6e0026b2b912058d77af361d4f3d0dc0
+      Description: Upload Image
+      MemorySize: 128
+      Timeout: 3
+      Environment:
+        Variables:
+          DynamoDbName: ffs-user-image
+          origin: '*'
+          headers: '*'
+          methods: GET
+          credentials: true
+      Policies:
+      - DynamoDBReadPolicy:
+          TableName: ffs-user-image
+      Events:
+        ffsInfo:
+          Type: Api
+          Properties:
+            Path: /ffs/info
+            Method: GET
+            RestApiId:
+              Ref: ffsAPI
+            Auth:
+              Authorizer: CognitoAuth
+  ffsUpload:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: app.lambda_handler
+      Runtime: python3.8
+      CodeUri: s3://ffs-codes/6c9ea3190e7a72a7790f8e5ca2f59495
+      Description: Upload Image
+      MemorySize: 128
+      Timeout: 10
+      Environment:
+        Variables:
+          BucketName: ffs-user-image
+          origin: '*'
+          headers: '*'
+          methods: OPTIONS, POST
+          credentials: true
+      Policies:
+      - S3CrudPolicy:
+          BucketName: ffs-user-image
+      Events:
+        ffsUpload:
+          Type: Api
+          Properties:
+            Path: /ffs/upload
+            Method: POST
+            RestApiId:
+              Ref: ffsAPI
+            Auth:
+              Authorizer: CognitoAuth
